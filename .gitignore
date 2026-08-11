@@ -35,6 +35,8 @@ uploads/*
 !uploads/.gitkeep
 
 # local notes / ai
+docs/
+.superpowers/
 CLAUDE.md
 claude.md
 
