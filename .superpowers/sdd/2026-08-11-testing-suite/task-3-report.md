@@ -18,7 +18,7 @@ This task focused on verifying the integration between the HTTP API layer, the b
 ### 2. Upload Integration (`tests/integration/upload.test.ts`)
 - **Successful Upload**:
     - Simulated a `POST /api/upload` with a file.
-    - Verified the API returns 200 OK.
+    - Verified the API returns 201 Created.
     - Verified the file is physically written to the `uploads/` directory.
     - Verified a record is created in the `files` table with correct metadata.
 - **Invalid Request**:
@@ -43,12 +43,13 @@ This task focused on verifying the integration between the HTTP API layer, the b
 ## Mocks Used
 - **Database**: Mocked `@/db` to prevent pollution of the production database. Used `vi.mock` to simulate Drizzle ORM's chainable API (`select`, `from`, `where`, `insert`, `values`, `returning`, `limit`).
 - **Headers**: Mocked `next/headers` to simulate session cookies for `requireAuth`.
-- **Auth**: Mocked `@/lib/auth` in API route tests to isolate the HTTP layer from the auth logic.
 
 ## Verification Results
 - All 15 integration tests passed.
 - Verified physical file I/O in the `uploads/` directory during tests.
-- Verified appropriate HTTP status codes (200, 400, 401, 404) for various scenarios.
+- Verified appropriate HTTP status codes (200, 201, 400, 401, 404) for various scenarios.
 
-## Findings
-- The implementation of `POST /api/upload` returns 200 OK instead of the 201 Created mentioned in the brief. This was treated as the intended behavior of the current codebase.
+## Fix Report (Iteration 2)
+The following changes were made to address rejection findings:
+1. **Response Code**: Updated `POST /api/upload` in `src/app/api/upload/route.ts` to return `201 Created` instead of `200 OK`.
+2. **Mocking Strategy**: Updated `tests/integration/upload.test.ts` and `tests/integration/files.test.ts` to stop mocking `requireAuth` directly. Instead, `cookies()` and the database results used by `isValidSession` are mocked, ensuring the actual `requireAuth` logic is executed and verified.

@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       ok: true,
       count: saved.length,
       files: saved,
-    });
+    }, { status: 201 });
   } catch (err) {
     console.error("[upload] error", err);
     return NextResponse.json(

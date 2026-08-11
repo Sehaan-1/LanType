@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { GET as listHandler } from '@/app/api/files/route';
 import { GET as getHandler } from '@/app/api/files/[id]/route';
 import { db } from '@/db';
-import { requireAuth } from '@/lib/auth';
+import { cookies } from 'next/headers';
 import { UPLOAD_DIR } from '@/lib/files';
 import fs from 'fs';
 import path from 'path';
@@ -17,8 +17,8 @@ vi.mock('@/db', () => ({
   },
 }));
 
-vi.mock('@/lib/auth', () => ({
-  requireAuth: vi.fn(),
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(),
 }));
 
 describe('Files Integration', () => {
@@ -38,9 +38,24 @@ describe('Files Integration', () => {
     }
   });
 
+  async function mockAuth(isValid: boolean) {
+    if (isValid) {
+      const mockCookie = {
+        get: vi.fn().mockReturnValue({ value: 'valid-token' }),
+      };
+      (cookies as any).mockResolvedValueOnce(mockCookie);
+      (db.limit as any).mockResolvedValueOnce([{ token: 'valid-token' }]);
+    } else {
+      const mockCookie = {
+        get: vi.fn().mockReturnValue(undefined),
+      };
+      (cookies as any).mockResolvedValueOnce(mockCookie);
+    }
+  }
+
   describe('GET /api/files', () => {
     it('should list all files', async () => {
-      (requireAuth as any).mockResolvedValueOnce(true);
+      await mockAuth(true);
 
       const mockFiles = [
         { id: 1, originalName: 'file1.txt', storedName: 'file1.txt', mimeType: 'text/plain', size: 10, uploadedAt: new Date() },
@@ -58,7 +73,7 @@ describe('Files Integration', () => {
     });
 
     it('should return 401 if unauthorized', async () => {
-      (requireAuth as any).mockResolvedValueOnce(false);
+      await mockAuth(false);
 
       const request = new Request('http://localhost/api/files');
       const response = await listHandler(request);
@@ -68,13 +83,11 @@ describe('Files Integration', () => {
 
   describe('GET /api/files/[id]', () => {
     it('should return the file if it exists', async () => {
-      (requireAuth as any).mockResolvedValueOnce(true);
+      await mockAuth(true);
 
       const fileName = 'test-file.txt';
       const filePath = path.join(UPLOAD_DIR, fileName);
       fs.writeFileSync(filePath, 'file content');
-      console.log('File written to:', filePath);
-      console.log('File exists:', fs.existsSync(filePath));
 
       const mockFile = {
         id: 123,
@@ -94,7 +107,7 @@ describe('Files Integration', () => {
     });
 
     it('should return 404 if the file does not exist in DB', async () => {
-      (requireAuth as any).mockResolvedValueOnce(true);
+      await mockAuth(true);
 
       (db.limit as any).mockResolvedValueOnce([]);
 
@@ -105,7 +118,7 @@ describe('Files Integration', () => {
     });
 
     it('should return 404 if the file does not exist on disk', async () => {
-      (requireAuth as any).mockResolvedValueOnce(true);
+      await mockAuth(true);
 
       const mockFile = {
         id: 123,
@@ -123,7 +136,7 @@ describe('Files Integration', () => {
     });
 
     it('should return 400 for invalid id', async () => {
-      (requireAuth as any).mockResolvedValueOnce(true);
+      await mockAuth(true);
 
       const request = new Request('http://localhost/api/files/abc');
       const response = await getHandler(request, { params: Promise.resolve({ id: 'abc' }) });

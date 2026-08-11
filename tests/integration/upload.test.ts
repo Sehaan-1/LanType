@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { POST as uploadHandler } from '@/app/api/upload/route';
 import { db } from '@/db';
-import { requireAuth } from '@/lib/auth';
+import { cookies } from 'next/headers';
 import { UPLOAD_DIR } from '@/lib/files';
 import fs from 'fs';
 import path from 'path';
@@ -18,11 +18,15 @@ vi.mock('@/db', () => ({
       size: 12,
       uploaderIp: '127.0.0.1',
     }]),
+    select: vi.fn().mockReturnThis(),
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(),
   },
 }));
 
-vi.mock('@/lib/auth', () => ({
-  requireAuth: vi.fn(),
+vi.mock('next/headers', () => ({
+  cookies: vi.fn(),
 }));
 
 describe('Upload Integration', () => {
@@ -34,7 +38,6 @@ describe('Upload Integration', () => {
   });
 
   afterEach(() => {
-    // Clean up uploads directory
     if (fs.existsSync(UPLOAD_DIR)) {
       const files = fs.readdirSync(UPLOAD_DIR);
       for (const file of files) {
@@ -43,8 +46,23 @@ describe('Upload Integration', () => {
     }
   });
 
+  async function mockAuth(isValid: boolean) {
+    if (isValid) {
+      const mockCookie = {
+        get: vi.fn().mockReturnValue({ value: 'valid-token' }),
+      };
+      (cookies as any).mockResolvedValueOnce(mockCookie);
+      (db.limit as any).mockResolvedValueOnce([{ token: 'valid-token' }]);
+    } else {
+      const mockCookie = {
+        get: vi.fn().mockReturnValue(undefined),
+      };
+      (cookies as any).mockResolvedValueOnce(mockCookie);
+    }
+  }
+
   it('should successfully upload a file', async () => {
-    (requireAuth as any).mockResolvedValueOnce(true);
+    await mockAuth(true);
 
     const file = new File(['hello world'], 'test.txt', { type: 'text/plain' });
     const formData = new FormData();
@@ -58,24 +76,20 @@ describe('Upload Integration', () => {
     const response = await uploadHandler(request);
     const data = await response.json();
 
-    expect(response.status).toBe(200); // Implementation uses 200, brief said 201. Sticking to 200.
+    expect(response.status).toBe(201);
     expect(data.ok).toBe(true);
     expect(data.count).toBe(1);
     expect(data.files[0].originalName).toBe('test.txt');
 
-    // Verify file exists on disk
     const storedName = data.files[0].storedName;
     expect(fs.existsSync(path.join(UPLOAD_DIR, storedName))).toBe(true);
-
-    // Verify DB record creation
     expect(db.insert).toHaveBeenCalled();
   });
 
   it('should return 400 if no files are provided', async () => {
-    (requireAuth as any).mockResolvedValueOnce(true);
+    await mockAuth(true);
 
     const formData = new FormData();
-    // No files appended
 
     const request = new Request('http://localhost/api/upload', {
       method: 'POST',
@@ -90,7 +104,7 @@ describe('Upload Integration', () => {
   });
 
   it('should return 401 if unauthorized', async () => {
-    (requireAuth as any).mockResolvedValueOnce(false);
+    await mockAuth(false);
 
     const formData = new FormData();
     formData.append('files', new File(['test'], 'test.txt'));
