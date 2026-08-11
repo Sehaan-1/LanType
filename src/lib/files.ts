@@ -15,7 +15,7 @@ export async function ensureUploadDir() {
 export function safeFilename(name: string): string {
   const base = path.basename(name).replace(/[\x00-\x1f\x7f]/g, "");
   const cleaned = base.replace(/[<>:"|?*\\/]/g, "_").trim();
-  if (!cleaned || cleaned === "." || cleaned === "..") {
+  if (!cleaned || cleaned === "." || cleaned === ".." || /^\.+$/.test(cleaned)) {
     return `file-${Date.now()}`;
   }
   // Cap length while preserving extension
